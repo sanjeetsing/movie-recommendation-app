@@ -51,13 +51,9 @@ app.post("/recommendations", async (request, reply) => {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
   try {
-    // If key is missing, treat like "OpenAI unavailable" and fallback
-    if (!process.env.OPENAI_API_KEY) {
-      return sendFallback(
-        reply,
-        cleanedInput,
-        "OPENAI_API_KEY missing in backend/.env",
-      );
+    // If OpenAI client is not available (no key), fallback
+    if (!openai) {
+      return sendFallback(reply, cleanedInput, "OpenAI key not configured");
     }
 
     const prompt = `
@@ -85,12 +81,7 @@ Rules:
     const parsed = safeParseJson(text);
 
     if (!parsed || !Array.isArray(parsed.movies) || parsed.movies.length < 3) {
-      // If OpenAI returns weird format, fallback but still save something
-      return sendFallback(
-        reply,
-        cleanedInput,
-        "OpenAI returned unexpected format",
-      );
+      return sendFallback(reply, cleanedInput, "OpenAI returned bad format");
     }
 
     const movies = parsed.movies
@@ -100,7 +91,6 @@ Rules:
 
     const timestamp = new Date().toISOString();
 
-    // Save to SQLite
     insertRecommendation({
       user_input: cleanedInput,
       recommended_movies: movies,
@@ -114,7 +104,6 @@ Rules:
     const status = err?.status;
     const code = err?.code;
 
-    // Fallback for common OpenAI failures (quota or invalid key)
     if (status === 401 || code === "invalid_api_key") {
       return sendFallback(reply, cleanedInput, "OpenAI key invalid (401)");
     }
@@ -123,7 +112,6 @@ Rules:
       return sendFallback(reply, cleanedInput, "OpenAI quota exceeded (429)");
     }
 
-    // Any other unexpected error
     return reply.code(500).send({
       error: "Server error",
       message: err?.message || "Unknown error",

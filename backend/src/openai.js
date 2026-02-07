@@ -1,8 +1,6 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import OpenAI from "openai";
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Create client only if key exists (so Render won't crash)
+const apiKey = process.env.OPENAI_API_KEY;
+
+export const openai = apiKey ? new OpenAI({ apiKey }) : null;
