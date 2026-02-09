@@ -1,24 +1,32 @@
-
 # 🎬 Movie Recommendation App
 
-A simple full-stack web application that suggests movies based on user preferences such as genre, mood, or similar films.
+A full-stack web application that suggests movies based on user preferences such as genre, mood, or similar films.
 
-This project was built to demonstrate practical skills in **frontend development, backend APIs, database integration, and error handling** in a real-world scenario.
+This project demonstrates practical skills in **frontend development, backend APIs, database integration, API handling, deployment, and error handling** in a real-world scenario.
 
 ---
 
-## ✨ What this project does
+## 🌐 Live Demo
 
-* Takes user input such as:
+Frontend (Vercel):
+[https://movie-recommendation-app-flax-six.vercel.app/](https://movie-recommendation-app-flax-six.vercel.app/)
 
-  * Genre
-  * Mood
-  * Similar movies
-  * Actors or language
-* Returns **3–5 movie recommendations**
-* Saves recommendations in a **SQLite database**
-* Displays history of past recommendations
-* Handles API errors gracefully using fallback recommendations
+Backend API (Render):
+[https://movie-recommendation-app-b25c.onrender.com/](https://movie-recommendation-app-b25c.onrender.com/)
+
+Health Check:
+[https://movie-recommendation-app-b25c.onrender.com/health](https://movie-recommendation-app-b25c.onrender.com/health)
+
+---
+
+## ✨ Features
+
+• Takes user input (genre, mood, similar movies, etc.)
+• Returns **3–5 movie recommendations**
+• Saves recommendations in **SQLite database**
+• Displays history of past recommendations
+• Handles API errors gracefully using fallback logic
+• Fully deployed frontend and backend
 
 ---
 
@@ -38,42 +46,51 @@ This project was built to demonstrate practical skills in **frontend development
 
 * SQLite
 
-### Other Tools
+### APIs
 
-* dotenv
-* OpenAI API (with fallback handling)
+* Google Gemini API
+* Fallback recommendation logic
 
----
+### Deployment
 
-## 📌 Features
-
-* Clean and responsive UI
-* Backend API with structured responses
-* Database storage of user queries
-* Error handling and fallback mechanism
-* History endpoint to view past recommendations
+* Vercel (Frontend)
+* Render (Backend)
 
 ---
 
-## 🧠 Why I built this
+## 📌 How the System Works
 
-I wanted to build a small but complete application that covers:
+1. User enters a movie preference.
+2. Frontend sends a request to backend API.
+3. Backend:
 
-* API integration
-* Full-stack communication
-* Database storage
-* Real-world error handling
-
-This project helped me understand how frontend, backend, and database work together in a production-style setup.
+   * Calls Gemini API for recommendations
+   * If API fails → fallback recommendations used
+4. Recommendations stored in SQLite.
+5. Results displayed on UI.
 
 ---
 
-## 🚀 How to Run the Project
+## 🧠 Why I Built This
 
-### 1. Clone the repository
+I wanted to build a small but complete full-stack project that covers:
+
+• API integration
+• Frontend-backend communication
+• Database storage
+• Deployment to cloud
+• Real-world error handling
+
+This project helped me understand how production-style applications are built and deployed.
+
+---
+
+## 🚀 How to Run Locally
+
+### 1. Clone Repository
 
 ```bash
-git clone <your-repo-link>
+git clone https://github.com/sanjeetsing/movie-recommendation-app.git
 cd movie-recommendation-app
 ```
 
@@ -117,11 +134,11 @@ http://localhost:5173
 
 SQLite is used to store:
 
-* User input
-* Recommended movies
-* Timestamp
+• User input
+• Recommended movies
+• Timestamp
 
-You can check saved data here:
+Check saved data:
 
 ```
 http://localhost:3001/history
@@ -129,65 +146,50 @@ http://localhost:3001/history
 
 ---
 
-## ⚠️ API Handling
+## ⚠️ Error Handling
 
-If the OpenAI API quota or billing is unavailable:
+If Gemini API:
 
-* The system automatically returns fallback movie recommendations
-* The app continues to work normally
-* Data is still saved in the database
+* quota exceeded
+* invalid key
+* network error
 
-This ensures reliability and a better user experience.
+The app automatically:
+
+* returns fallback recommendations
+* stores results in database
+* keeps UI working
+
+This ensures reliability and good user experience.
 
 ---
 
 ## 📷 Screenshots
 
-![Home Screen](screenshots/home.png)
+Add screenshots in this folder:
 
-![Recommendations](screenshots/recommendation.png)
+```
+screenshots/home.png
+screenshots/recommendation.png
 ```
 
 ---
 
 ## 🔮 Future Improvements
 
-Possible enhancements:
-
-* Movie posters and ratings
-* User login
-* Cloud deployment
-* Improved recommendation logic
+• Movie posters and ratings
+• User login system
+• Better recommendation algorithm
+• Caching recommendations
+• Cloud database
 
 ---
 
 ## 👨‍💻 Author
 
-Built by **Sanjeet Singh Solanki**
-As part of a full-stack development assignment and learning project.
+Sanjeet Singh
+Full-Stack Developer | Python | React | APIs
 
----
+Email: [sanjeetsinghsolanki11@gmail.com]
 
-## 📬 Contact
-
-Email:
-[sanjeetsinghsolanki11@gmail.com]
-
----
-
-## ⭐ Notes
-
-Before running the project:
-
-* Install dependencies using `npm install`
-* Do not commit `.env` or `node_modules` to GitHub
-
----
-
-## Small improvement I made (so you know)
-
-* Fixed headings hierarchy
-* Corrected screenshot formatting
-* Made wording more natural
-* Improved readability for recruiters
 
