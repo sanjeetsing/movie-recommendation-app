@@ -8,35 +8,69 @@ dotenv.config();
 
 const app = Fastify({ logger: true });
 
-// Allow frontend calls
-await app.register(cors, { origin: true });
+/* =========================
+   CORS (secure)
+   ========================= */
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://movie-recommendation-app-flax-six.vercel.app",
+];
 
-// Health check
-app.get("/health", async () => ({ ok: true }));
+await app.register(cors, {
+  origin: (origin, cb) => {
+    // allow Postman/curl (no origin header)
+    if (!origin) return cb(null, true);
 
-// Debug endpoint to check environment variables (safe)
-app.get("/debug-env", async () => {
-  const key = process.env.GEMINI_API_KEY || "";
-  return {
-    hasGeminiKey: Boolean(key),
-    keyStartsWith: key.slice(0, 6), // safe preview
-    keyLength: key.length,
-    model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-  };
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+
+    // block others
+    cb(new Error("Not allowed by CORS"), false);
+  },
 });
 
-// Optional: check saved history in SQLite
+/* =========================
+   Basic routes
+   ========================= */
+app.get("/", async () => ({
+  ok: true,
+  message: "Movie Recommendation API is running",
+  endpoints: ["/health", "/recommendations", "/history"],
+}));
+
+app.get("/health", async () => ({ ok: true }));
+
+/* =========================
+   Debug env (DEV only)
+   ========================= */
+if (process.env.NODE_ENV !== "production") {
+  app.get("/debug-env", async () => {
+    const key = process.env.GEMINI_API_KEY || "";
+    return {
+      hasGeminiKey: Boolean(key),
+      keyStartsWith: key.slice(0, 6),
+      keyLength: key.length,
+      model: process.env.GEMINI_MODEL || "models/gemini-2.5-flash",
+      nodeEnv: process.env.NODE_ENV || "not_set",
+    };
+  });
+}
+
+/* =========================
+   History
+   ========================= */
 app.get("/history", async (request) => {
   const limit = Number(request.query?.limit ?? 20);
   const safeLimit = Number.isFinite(limit) ? limit : 20;
   return { items: getRecentRecommendations(safeLimit) };
 });
 
-// POST /recommendations
+/* =========================
+   Recommendations
+   ========================= */
 app.post("/recommendations", async (request, reply) => {
   const { user_input } = request.body ?? {};
 
-  // Validate input
+  // validate
   if (
     !user_input ||
     typeof user_input !== "string" ||
@@ -52,20 +86,19 @@ app.post("/recommendations", async (request, reply) => {
   try {
     const modelClient = getGeminiModel();
 
-    // If Gemini key missing or model not available -> fallback
+    // If Gemini not configured -> fallback
     if (!modelClient) {
       return sendFallback(reply, cleanedInput, "Gemini key not configured");
     }
 
+    // Strict JSON prompt
     const prompt = `
 You are a movie recommendation engine.
 
 User preference: "${cleanedInput}"
 
-Return ONLY valid JSON in exactly this format:
-{
-  "movies": ["Movie 1", "Movie 2", "Movie 3"]
-}
+Return ONLY valid JSON and NOTHING ELSE in exactly this structure:
+{"movies":["Movie 1","Movie 2","Movie 3"]}
 
 Rules:
 - Recommend 3 to 5 movies
@@ -73,13 +106,11 @@ Rules:
 - No markdown, no explanations, no extra text
 `.trim();
 
-    // Gemini call
-    const result = await modelClient.generateContent(prompt);
-    const text = (result?.response?.text() || "").trim();
-
+    // Gemini call with timeout (prevents long hanging)
+    const text = await generateWithTimeout(modelClient, prompt, 12000); // 12 seconds
     const parsed = safeParseJson(text);
 
-    // If Gemini returns unexpected format -> fallback
+    // bad format -> fallback
     if (!parsed || !Array.isArray(parsed.movies) || parsed.movies.length < 3) {
       return sendFallback(reply, cleanedInput, "Gemini returned bad format");
     }
@@ -91,7 +122,6 @@ Rules:
 
     const timestamp = new Date().toISOString();
 
-    // Save to SQLite
     insertRecommendation({
       user_input: cleanedInput,
       recommended_movies: movies,
@@ -101,11 +131,26 @@ Rules:
     return reply.code(200).send({ user_input: cleanedInput, movies });
   } catch (err) {
     request.log.error(err);
-
-    // Any Gemini error -> fallback (keeps app working)
     return sendFallback(reply, cleanedInput, err?.message || "Gemini error");
   }
 });
+
+/* =========================
+   Helpers
+   ========================= */
+
+async function generateWithTimeout(modelClient, prompt, ms = 12000) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Gemini request timeout")), ms),
+  );
+
+  const run = (async () => {
+    const result = await modelClient.generateContent(prompt);
+    return (result?.response?.text() || "").trim();
+  })();
+
+  return Promise.race([run, timeout]);
+}
 
 function sendFallback(reply, user_input, reason) {
   const fallbackMovies = [
@@ -118,6 +163,7 @@ function sendFallback(reply, user_input, reason) {
 
   const timestamp = new Date().toISOString();
 
+  // save fallback result too (DB requirement satisfied)
   insertRecommendation({
     user_input,
     recommended_movies: fallbackMovies,
@@ -132,12 +178,12 @@ function sendFallback(reply, user_input, reason) {
 }
 
 function safeParseJson(text) {
-  // Try direct JSON parse
+  // direct parse
   try {
     return JSON.parse(text);
   } catch {}
 
-  // Fallback: extract first JSON object
+  // extract first JSON object
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) return null;
 
@@ -148,6 +194,9 @@ function safeParseJson(text) {
   }
 }
 
+/* =========================
+   Start server
+   ========================= */
 const PORT = Number(process.env.PORT || 3001);
 
 app
