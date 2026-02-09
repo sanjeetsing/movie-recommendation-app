@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import dotenv from "dotenv";
-import { openai } from "./openai.js";
+import { getGeminiModel } from "./gemini.js";
 import { insertRecommendation, getRecentRecommendations } from "./db.js";
 
 dotenv.config();
@@ -16,12 +16,12 @@ app.get("/health", async () => ({ ok: true }));
 
 // Debug endpoint to check environment variables (safe)
 app.get("/debug-env", async () => {
-  const key = process.env.OPENAI_API_KEY || "";
+  const key = process.env.GEMINI_API_KEY || "";
   return {
-    hasKey: Boolean(key),
-    keyStartsWith: key.slice(0, 3),
+    hasGeminiKey: Boolean(key),
+    keyStartsWith: key.slice(0, 6), // safe preview
     keyLength: key.length,
-    model: process.env.OPENAI_MODEL || null,
+    model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
   };
 });
 
@@ -48,12 +48,13 @@ app.post("/recommendations", async (request, reply) => {
   }
 
   const cleanedInput = user_input.trim();
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
   try {
-    // If OpenAI client is not available (no key), fallback
-    if (!openai) {
-      return sendFallback(reply, cleanedInput, "OpenAI key not configured");
+    const modelClient = getGeminiModel();
+
+    // If Gemini key missing or model not available -> fallback
+    if (!modelClient) {
+      return sendFallback(reply, cleanedInput, "Gemini key not configured");
     }
 
     const prompt = `
@@ -72,16 +73,15 @@ Rules:
 - No markdown, no explanations, no extra text
 `.trim();
 
-    const response = await openai.responses.create({
-      model,
-      input: prompt,
-    });
+    // Gemini call
+    const result = await modelClient.generateContent(prompt);
+    const text = (result?.response?.text() || "").trim();
 
-    const text = (response.output_text || "").trim();
     const parsed = safeParseJson(text);
 
+    // If Gemini returns unexpected format -> fallback
     if (!parsed || !Array.isArray(parsed.movies) || parsed.movies.length < 3) {
-      return sendFallback(reply, cleanedInput, "OpenAI returned bad format");
+      return sendFallback(reply, cleanedInput, "Gemini returned bad format");
     }
 
     const movies = parsed.movies
@@ -91,6 +91,7 @@ Rules:
 
     const timestamp = new Date().toISOString();
 
+    // Save to SQLite
     insertRecommendation({
       user_input: cleanedInput,
       recommended_movies: movies,
@@ -101,21 +102,8 @@ Rules:
   } catch (err) {
     request.log.error(err);
 
-    const status = err?.status;
-    const code = err?.code;
-
-    if (status === 401 || code === "invalid_api_key") {
-      return sendFallback(reply, cleanedInput, "OpenAI key invalid (401)");
-    }
-
-    if (status === 429 || code === "insufficient_quota") {
-      return sendFallback(reply, cleanedInput, "OpenAI quota exceeded (429)");
-    }
-
-    return reply.code(500).send({
-      error: "Server error",
-      message: err?.message || "Unknown error",
-    });
+    // Any Gemini error -> fallback (keeps app working)
+    return sendFallback(reply, cleanedInput, err?.message || "Gemini error");
   }
 });
 
@@ -144,10 +132,12 @@ function sendFallback(reply, user_input, reason) {
 }
 
 function safeParseJson(text) {
+  // Try direct JSON parse
   try {
     return JSON.parse(text);
   } catch {}
 
+  // Fallback: extract first JSON object
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) return null;
 
