@@ -169,8 +169,8 @@ This ensures reliability and good user experience.
 Add screenshots in this folder:
 
 ```
-screenshots/home.png
-screenshots/recommendation.png
+screenshots\home.png
+screenshots\recommendation.png
 ```
 
 ---
